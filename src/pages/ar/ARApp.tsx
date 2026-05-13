@@ -14,7 +14,7 @@ import { resolveArObjectDefinitions } from '../../utils/activityArConfig';
 import './App.css';
 
 type ARAppProps = {
-  onExit?: () => void;
+  onExit?: (reason?: 'exit' | 'submitted') => void;
   activityId?: string;
   studentId?: string;
   modelUrl?: string;
@@ -505,7 +505,7 @@ function ARApp({
     try {
       if (isViewMode) {
         setSubmitState({ status: 'success' });
-        onExit?.();
+        onExit?.('exit');
         return;
       }
 
@@ -540,7 +540,7 @@ function ARApp({
       }
 
       setSubmitState({ status: 'success' });
-      onExit?.();
+      onExit?.('submitted');
     } catch (error) {
       console.error('Failed to submit activity:', error);
       submitInFlightRef.current = false;

@@ -135,6 +135,7 @@ function App() {
             </ProtectedRoute>
           } 
         />
+        <Route path="/mobile/activity/:id/start" element={<ActivityStart />} />
         <Route 
           path="/profile" 
           element={
