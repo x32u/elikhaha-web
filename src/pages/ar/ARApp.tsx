@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo, type RefObject } from 'react';
 import * as THREE from 'three';
 import { CameraFeed } from './components/CameraFeed';
 import { ARSceneV2, type SerializedPaintDecal, type SerializedPuzzlePiece, type SerializedSceneObject } from './components/ARSceneV2';
@@ -29,6 +29,7 @@ type ARAppProps = {
   allowedObjectIds?: string[];
   puzzlePieces?: number;
   manualCameraStart?: boolean;
+  vrMode?: boolean;
 };
 
 type ArHistorySnapshot = {
@@ -45,6 +46,149 @@ const EMPTY_PAINT_STATE: SerializedPaintDecal[] = [];
 const EMPTY_SCENE_STATE: SerializedSceneObject[] = [];
 const EMPTY_PUZZLE_STATE: SerializedPuzzlePiece[] = [];
 const MAX_UNDO_STEPS = 30;
+
+function getSourceSize(source: HTMLVideoElement | HTMLCanvasElement) {
+  if (source instanceof HTMLVideoElement) {
+    return {
+      width: source.videoWidth,
+      height: source.videoHeight,
+    };
+  }
+
+  return {
+    width: source.width,
+    height: source.height,
+  };
+}
+
+function drawCoverSource(
+  ctx: CanvasRenderingContext2D,
+  source: HTMLVideoElement | HTMLCanvasElement,
+  rect: { x: number; y: number; width: number; height: number },
+  mirrorX = false
+) {
+  const sourceSize = getSourceSize(source);
+  if (!sourceSize.width || !sourceSize.height || rect.width <= 0 || rect.height <= 0) return;
+
+  const scale = Math.max(rect.width / sourceSize.width, rect.height / sourceSize.height);
+  const drawWidth = sourceSize.width * scale;
+  const drawHeight = sourceSize.height * scale;
+  const drawX = (rect.width - drawWidth) / 2;
+  const drawY = (rect.height - drawHeight) / 2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.width, rect.height);
+  ctx.clip();
+
+  if (mirrorX) {
+    ctx.translate(rect.x + rect.width, rect.y);
+    ctx.scale(-1, 1);
+    ctx.drawImage(source, drawX, drawY, drawWidth, drawHeight);
+  } else {
+    ctx.drawImage(source, rect.x + drawX, rect.y + drawY, drawWidth, drawHeight);
+  }
+
+  ctx.restore();
+}
+
+function VrSplitCompositor({
+  enabled,
+  videoRef,
+  sceneCanvasRef,
+}: {
+  enabled: boolean;
+  videoRef: RefObject<HTMLVideoElement | null>;
+  sceneCanvasRef: RefObject<HTMLCanvasElement | null>;
+}) {
+  const outputCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const sceneDrawWarningShownRef = useRef(false);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+
+    let rafId = 0;
+    const render = () => {
+      const outputCanvas = outputCanvasRef.current;
+      const video = videoRef.current;
+      if (!outputCanvas) {
+        rafId = window.requestAnimationFrame(render);
+        return;
+      }
+
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const pixelWidth = Math.max(1, Math.floor(width * dpr));
+      const pixelHeight = Math.max(1, Math.floor(height * dpr));
+      if (outputCanvas.width !== pixelWidth || outputCanvas.height !== pixelHeight) {
+        outputCanvas.width = pixelWidth;
+        outputCanvas.height = pixelHeight;
+      }
+
+      const ctx = outputCanvas.getContext('2d', { alpha: false });
+      if (!ctx) {
+        rafId = window.requestAnimationFrame(render);
+        return;
+      }
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+
+      const eyeWidth = pixelWidth / 2;
+      const eyes = [
+        { x: 0, y: 0, width: eyeWidth, height: pixelHeight },
+        { x: eyeWidth, y: 0, width: eyeWidth, height: pixelHeight },
+      ];
+
+      if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        eyes.forEach((eye) => drawCoverSource(ctx, video, eye, true));
+      }
+
+      const sceneCanvas = sceneCanvasRef.current;
+      if (sceneCanvas?.width && sceneCanvas?.height) {
+        eyes.forEach((eye) => {
+          try {
+            drawCoverSource(ctx, sceneCanvas, eye, false);
+          } catch (error) {
+            if (!sceneDrawWarningShownRef.current) {
+              console.warn('Unable to mirror AR scene into VR view:', error);
+              sceneDrawWarningShownRef.current = true;
+            }
+          }
+        });
+      }
+
+      ctx.fillStyle = 'rgba(0,0,0,0.72)';
+      ctx.fillRect(Math.floor(eyeWidth) - 1, 0, 2, pixelHeight);
+
+      rafId = window.requestAnimationFrame(render);
+    };
+
+    rafId = window.requestAnimationFrame(render);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [enabled, sceneCanvasRef, videoRef]);
+
+  if (!enabled) return null;
+
+  return (
+    <canvas
+      ref={outputCanvasRef}
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 2,
+        pointerEvents: 'none',
+        background: '#000',
+      }}
+    />
+  );
+}
 
 function cloneSerializedArray<T>(value: T[] = []): T[] {
   return JSON.parse(JSON.stringify(value || [])) as T[];
@@ -94,6 +238,7 @@ function ARApp({
   allowedObjectIds = [],
   puzzlePieces = 0,
   manualCameraStart = false,
+  vrMode = false,
 }: ARAppProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sceneCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -819,6 +964,12 @@ function ARApp({
         onCanvasReady={(canvas) => {
           sceneCanvasRef.current = canvas;
         }}
+      />
+
+      <VrSplitCompositor
+        enabled={canRunAr && vrMode}
+        videoRef={videoRef}
+        sceneCanvasRef={sceneCanvasRef}
       />
 
       {!canRunAr && normalizedInstructions && (

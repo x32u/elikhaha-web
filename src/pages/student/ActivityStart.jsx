@@ -12,6 +12,7 @@ const ActivityStart = () => {
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const queryStudentId = query.get('studentId') || '';
   const isMobileLaunch = query.get('mobile') === '1';
+  const vrMode = query.get('vr') === '1';
   const returnUrl = query.get('returnUrl') || '';
   const state = location.state || {};
   const [directActivity, setDirectActivity] = useState(null);
@@ -161,6 +162,7 @@ const ActivityStart = () => {
       modelConfigs={modelConfigs}
       puzzlePieces={puzzlePieces}
       manualCameraStart={isMobileLaunch}
+      vrMode={vrMode}
       onExit={(reason) => {
         const type = reason === 'submitted' ? 'submitted' : 'exit';
         const deliveredToNative = notifyMobile(type);
