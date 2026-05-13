@@ -77,6 +77,24 @@ body {
   display: block;
 }
 
+.control-panel.compact .tool-button {
+  gap: 4px;
+  padding: 6px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.control-panel.compact .tool-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.control-panel.compact .color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
 .brush-size-button {
   width: 34px;
   height: 34px;

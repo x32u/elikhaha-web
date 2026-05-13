@@ -81,6 +81,7 @@ interface ARSceneV2Props {
   grabState: GrabState;
   debugInfo: DebugInfo;
   targetQuaternion: THREE.Quaternion;
+  mirrorX?: boolean;
   paintMode: boolean;
   paintColor: THREE.Color;
   brushSize: number;
@@ -1147,9 +1148,11 @@ const HAND_CONNECTIONS = [
 function HandSkeleton({
   landmarks,
   isGrabbing,
+  mirrorX = true,
 }: {
   landmarks: HandLandmarks | null;
   isGrabbing: boolean;
+  mirrorX?: boolean;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const jointMeshes = useRef<THREE.Mesh[]>([]);
@@ -1171,10 +1174,8 @@ function HandSkeleton({
     const width = height * (size.width / size.height);
 
     allLandmarks.forEach((lm, i) => {
-      // Video is mirrored via CSS scaleX(-1), so we MUST mirror skeleton to match
-      // Raw lm.x=0 is left of raw frame, which appears on RIGHT of mirrored video
-      // So we use (1 - lm.x) to flip skeleton X to match visual
-      const ndcX = (1 - lm.x) * 2 - 1;  // Mirror to match CSS-mirrored video
+      const screenX = mirrorX ? 1 - lm.x : lm.x;
+      const ndcX = screenX * 2 - 1;
       const ndcY = -(lm.y * 2 - 1);
       
       const targetPos = new THREE.Vector3(
@@ -1457,6 +1458,7 @@ function SceneObjectSystem({
   isBucketFill = false,
   stateVersion = 0,
   palmCenter,
+  pointerMirrorX = true,
   onObjectMoveActiveChange,
 }: {
   objectRootRef: React.RefObject<THREE.Group | null>;
@@ -1473,6 +1475,7 @@ function SceneObjectSystem({
   isBucketFill?: boolean;
   stateVersion?: number;
   palmCenter: PalmPosition | null;
+  pointerMirrorX?: boolean;
   onObjectMoveActiveChange?: (active: boolean) => void;
 }) {
   const { camera, size } = useThree();
@@ -1818,10 +1821,10 @@ function SceneObjectSystem({
 
       if (removeArmedRef.current) return;
 
-      const mirroredX = 1 - handLandmarks.indexTip.x;
+      const pointerX = pointerMirrorX ? 1 - handLandmarks.indexTip.x : handLandmarks.indexTip.x;
       const pointerThresholdPx = Math.max(44, Math.min(size.width, size.height) * 0.14);
       const hits = raycastFromFingertip(
-        mirroredX,
+        pointerX,
         handLandmarks.indexTip.y,
         camera,
         Array.from(objectsRef.current.values())
@@ -1839,7 +1842,7 @@ function SceneObjectSystem({
       if (!selectedId) {
         selectedId = pickSceneObjectNearPointer(
           objectsRef.current,
-          mirroredX,
+          pointerX,
           handLandmarks.indexTip.y,
           camera,
           size,
@@ -1866,8 +1869,8 @@ function SceneObjectSystem({
         colorArmedRef.current = false;
         lastObjectPaintPosRef.current = null;
       } else {
-        const mirroredX = 1 - handLandmarks.indexTip.x;
-        const hitInfo = getSceneObjectPaintHit(mirroredX, handLandmarks.indexTip.y);
+        const pointerX = pointerMirrorX ? 1 - handLandmarks.indexTip.x : handLandmarks.indexTip.x;
+        const hitInfo = getSceneObjectPaintHit(pointerX, handLandmarks.indexTip.y);
 
         if (!hitInfo) {
           colorArmedRef.current = false;
@@ -1907,10 +1910,10 @@ function SceneObjectSystem({
     }
 
     if (!pinchMoveActiveRef.current) {
-      const mirroredX = 1 - handLandmarks.indexTip.x;
+      const pointerX = pointerMirrorX ? 1 - handLandmarks.indexTip.x : handLandmarks.indexTip.x;
       const pointerThresholdPx = Math.max(44, Math.min(size.width, size.height) * 0.14);
       const hits = raycastFromFingertip(
-        mirroredX,
+        pointerX,
         handLandmarks.indexTip.y,
         camera,
         Array.from(objectsRef.current.values())
@@ -1928,7 +1931,7 @@ function SceneObjectSystem({
       if (!selectedId) {
         selectedId = pickSceneObjectNearPointer(
           objectsRef.current,
-          mirroredX,
+          pointerX,
           handLandmarks.indexTip.y,
           camera,
           size,
@@ -2044,6 +2047,7 @@ function PuzzlePieceSystem({
   isRemoveTool = false,
   stateVersion = 0,
   palmCenter,
+  pointerMirrorX = true,
   editingEnabled = true,
   disabled = false,
   onPuzzleMoveActiveChange,
@@ -2062,6 +2066,7 @@ function PuzzlePieceSystem({
   isRemoveTool?: boolean;
   stateVersion?: number;
   palmCenter: PalmPosition | null;
+  pointerMirrorX?: boolean;
   editingEnabled?: boolean;
   disabled?: boolean;
   onPuzzleMoveActiveChange?: (active: boolean) => void;
@@ -2281,7 +2286,7 @@ function PuzzlePieceSystem({
 
       if (removeArmedRef.current) return;
 
-      const mirroredX = 1 - handLandmarks.indexTip.x;
+      const pointerX = pointerMirrorX ? 1 - handLandmarks.indexTip.x : handLandmarks.indexTip.x;
       const spawnedGroups = Array.from(piecesRef.current.values())
         .filter((piece) =>
           (piece.spawned || piece.group.userData.puzzleSpawned === true || piece.locked || piece.group.userData.puzzleLocked === true) &&
@@ -2291,7 +2296,7 @@ function PuzzlePieceSystem({
 
       if (spawnedGroups.length === 0) return;
 
-      const hits = raycastFromFingertip(mirroredX, handLandmarks.indexTip.y, camera, spawnedGroups);
+      const hits = raycastFromFingertip(pointerX, handLandmarks.indexTip.y, camera, spawnedGroups);
       let selectedId: string | null = null;
 
       if (hits.length > 0) {
@@ -2313,7 +2318,7 @@ function PuzzlePieceSystem({
         );
         selectedId = pickSceneObjectNearPointer(
           selectable,
-          mirroredX,
+          pointerX,
           handLandmarks.indexTip.y,
           camera,
           size,
@@ -2346,7 +2351,7 @@ function PuzzlePieceSystem({
     }
 
     if (!pinchMoveActiveRef.current) {
-      const mirroredX = 1 - handLandmarks.indexTip.x;
+      const pointerX = pointerMirrorX ? 1 - handLandmarks.indexTip.x : handLandmarks.indexTip.x;
       const unlockedGroups = Array.from(piecesRef.current.values())
         .filter((piece) =>
           (piece.spawned || piece.group.userData.puzzleSpawned === true) &&
@@ -2358,7 +2363,7 @@ function PuzzlePieceSystem({
 
       if (unlockedGroups.length === 0) return;
 
-      const hits = raycastFromFingertip(mirroredX, handLandmarks.indexTip.y, camera, unlockedGroups);
+      const hits = raycastFromFingertip(pointerX, handLandmarks.indexTip.y, camera, unlockedGroups);
       let selectedId: string | null = null;
 
       if (hits.length > 0) {
@@ -2382,7 +2387,7 @@ function PuzzlePieceSystem({
         );
         selectedId = pickSceneObjectNearPointer(
           selectable,
-          mirroredX,
+          pointerX,
           handLandmarks.indexTip.y,
           camera,
           size,
@@ -2464,6 +2469,7 @@ function PaintSystem({
   isRemoveTool = false,
   paintOcclusionRefs = [],
   stateVersion = 0,
+  pointerMirrorX = true,
 }: {
   anchorRef: React.RefObject<THREE.Group | null>;
   modelRef: React.RefObject<THREE.Group | null>;
@@ -2481,6 +2487,7 @@ function PaintSystem({
   isRemoveTool?: boolean;
   paintOcclusionRefs?: Array<React.RefObject<THREE.Object3D | null>>;
   stateVersion?: number;
+  pointerMirrorX?: boolean;
 }) {
   const { camera, scene } = useThree();
   const lastPaintTime = useRef(0);
@@ -2763,8 +2770,8 @@ function PaintSystem({
       return;
     }
 
-    const mirroredX = 1 - indexTip.x;
-    const modelHits = raycastFromFingertip(mirroredX, indexTip.y, camera, [modelRef.current]);
+    const pointerX = pointerMirrorX ? 1 - indexTip.x : indexTip.x;
+    const modelHits = raycastFromFingertip(pointerX, indexTip.y, camera, [modelRef.current]);
     const hit = modelHits.find(
       (candidate) =>
         candidate.object instanceof THREE.Mesh &&
@@ -2773,7 +2780,7 @@ function PaintSystem({
     );
 
     const occlusionHits = paintOcclusionRefs
-      .flatMap((ref) => (ref.current ? raycastFromFingertip(mirroredX, indexTip.y, camera, [ref.current]) : []))
+      .flatMap((ref) => (ref.current ? raycastFromFingertip(pointerX, indexTip.y, camera, [ref.current]) : []))
       .filter((candidate) =>
         candidate.object instanceof THREE.Mesh &&
         candidate.object?.userData?.isPaintDecal !== true &&
@@ -3024,6 +3031,7 @@ function SceneContent({
   grabState,
   debugInfo,
   targetQuaternion,
+  mirrorX = true,
   paintMode,
   paintColor,
   brushSize,
@@ -3136,6 +3144,7 @@ function SceneContent({
         <HandSkeleton
           landmarks={handLandmarks}
           isGrabbing={grabState.isGrabbing}
+          mirrorX={mirrorX}
         />
       )}
 
@@ -3174,6 +3183,7 @@ function SceneContent({
         isBucketFill={isBucketFill}
         stateVersion={stateVersion}
         palmCenter={grabState.currentPosition}
+        pointerMirrorX={mirrorX}
         onObjectMoveActiveChange={setIsMovingSceneObject}
       />
 
@@ -3193,6 +3203,7 @@ function SceneContent({
             isRemoveTool={isRemoveTool}
             stateVersion={stateVersion}
             palmCenter={grabState.currentPosition}
+            pointerMirrorX={mirrorX}
             editingEnabled={paintMode}
             disabled={isMovingSceneObject}
             onPuzzleMoveActiveChange={setIsMovingPuzzlePiece}
@@ -3213,6 +3224,7 @@ function SceneContent({
           isRemoveTool={isRemoveTool}
           stateVersion={stateVersion}
           palmCenter={grabState.currentPosition}
+          pointerMirrorX={mirrorX}
           editingEnabled={paintMode}
           disabled={isMovingSceneObject}
           onPuzzleMoveActiveChange={setIsMovingPuzzlePiece}
@@ -3238,6 +3250,7 @@ function SceneContent({
         isRemoveTool={isRemoveTool}
         paintOcclusionRefs={[objectRootRef]}
         stateVersion={stateVersion}
+        pointerMirrorX={mirrorX}
       />
 
       {/* Debug controls */}

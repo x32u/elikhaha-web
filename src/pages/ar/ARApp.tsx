@@ -291,6 +291,8 @@ function ARApp({
   const cameraFeedEnabled = !manualCameraStart;
   const showCameraPrompt = canRunAr && manualCameraStart && !manualCameraReady;
   const isVrActive = canRunAr && vrMode;
+  const cameraFacingMode = vrMode ? 'environment' : 'user';
+  const mirrorCamera = cameraFacingMode === 'user';
   const [isPortrait, setIsPortrait] = useState(
     typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
   );
@@ -628,6 +630,7 @@ function ARApp({
         video: {
           width: { ideal: 640 },
           height: { ideal: 480 },
+          facingMode: cameraFacingMode,
         },
         audio: false,
       });
@@ -638,7 +641,7 @@ function ARApp({
         audio: false,
       });
     }
-  }, []);
+  }, [cameraFacingMode]);
 
   const startManualCamera = useCallback(async () => {
     const video = videoRef.current;
@@ -914,6 +917,7 @@ function ARApp({
   useGestureSelect({
     landmarks,
     videoRef,
+    mirrorX: mirrorCamera,
     enabled: canRunAr && !isViewMode,
     blocked: grabState.isZooming,
     dwellMs: 500,
@@ -948,7 +952,7 @@ function ARApp({
       <CameraFeed
         videoRef={videoRef}
         enabled={cameraFeedEnabled}
-        facingMode="user"
+        facingMode={cameraFacingMode}
         onReady={handleCameraReady}
         onError={handleCameraError}
       />
@@ -981,7 +985,9 @@ function ARApp({
             <div style={{ fontSize: 42, marginBottom: 8 }}>📷</div>
             <h2 style={{ margin: '0 0 8px', fontSize: 24 }}>Start AR Camera</h2>
             <p style={{ margin: '0 0 18px', color: '#6b5a4d', lineHeight: 1.45 }}>
-              Tap this button so Chrome starts the camera inside the app.
+              {vrMode
+                ? 'Tap this button so Chrome starts the rear camera for VR.'
+                : 'Tap this button so Chrome starts the camera inside the app.'}
             </p>
             {cameraError && (
               <p style={{ margin: '0 0 14px', color: '#b42318', fontWeight: 700 }}>
@@ -1018,6 +1024,7 @@ function ARApp({
         grabState={grabState}
         debugInfo={debugInfo}
         targetQuaternion={targetQuaternion}
+        mirrorX={mirrorCamera}
         paintMode={canRunAr && paintMode}
         paintColor={toolConfig.color}
         brushSize={toolConfig.brushSize}
@@ -1159,6 +1166,7 @@ function ARApp({
               onAddObject={handleAddObject}
               puzzlePieces={puzzlePieceControls}
               onSpawnPuzzlePiece={handleSpawnPuzzlePiece}
+              compact
             />
           )}
         </VrTwinOverlay>
@@ -1200,36 +1208,57 @@ function ARApp({
       {canRunAr && !isViewMode && vrMode && (
         <VrTwinOverlay zIndex={1100}>
           {() => (
-            <div
-              style={{
-                position: 'absolute',
-                top: 16,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'rgba(0, 0, 0, 0.65)',
-                borderRadius: 999,
-                padding: '6px 12px',
-                color: 'white',
-                fontSize: 12,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                zIndex: 1100,
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              <span
+            <>
+              <div
                 style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  background: `#${toolConfig.color.getHexString()}`,
-                  border: '1px solid rgba(255,255,255,0.6)',
-                  boxShadow: '0 0 6px rgba(0,0,0,0.35)',
+                  position: 'absolute',
+                  top: 16,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: 'rgba(0, 0, 0, 0.65)',
+                  borderRadius: 999,
+                  padding: '6px 12px',
+                  color: 'white',
+                  fontSize: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  zIndex: 1100,
+                  backdropFilter: 'blur(10px)',
                 }}
-              />
-              <span>{toolConfig.label}</span>
-            </div>
+              >
+                <span
+                  style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: '50%',
+                    background: `#${toolConfig.color.getHexString()}`,
+                    border: '1px solid rgba(255,255,255,0.6)',
+                    boxShadow: '0 0 6px rgba(0,0,0,0.35)',
+                  }}
+                />
+                <span>{toolConfig.label}</span>
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 54,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: isTracking ? 'rgba(18, 128, 73, 0.78)' : 'rgba(180, 0, 0, 0.78)',
+                  borderRadius: 999,
+                  padding: '5px 10px',
+                  color: 'white',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  zIndex: 1100,
+                  backdropFilter: 'blur(10px)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {isTracking ? 'Hand detected' : 'Show hand to rear camera'}
+              </div>
+            </>
           )}
         </VrTwinOverlay>
       )}
@@ -1296,7 +1325,7 @@ function ARApp({
               type="button"
               style={{
                 position: 'absolute',
-                top: 54,
+                top: 82,
                 left: '50%',
                 transform: 'translateX(-50%)',
                 background: 'rgba(255, 255, 255, 0.95)',
@@ -1353,7 +1382,7 @@ function ARApp({
             <div
               style={{
                 position: 'absolute',
-                top: 54,
+                top: 82,
                 left: '50%',
                 transform: 'translateX(-50%)',
                 background: 'rgba(255, 255, 255, 0.95)',

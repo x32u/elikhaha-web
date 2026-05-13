@@ -19,6 +19,7 @@ interface ControlPanelProps {
   onAddObject?: (objectId: string) => void;
   puzzlePieces?: Array<{ id: string; label: string; spawned: boolean; locked: boolean }>;
   onSpawnPuzzlePiece?: (pieceId: string) => void;
+  compact?: boolean;
 }
 
 const PRESET_COLORS = [
@@ -57,6 +58,7 @@ export function ControlPanel({
   onAddObject,
   puzzlePieces = [],
   onSpawnPuzzlePiece,
+  compact = false,
 }: ControlPanelProps) {
   const [isLandscape, setIsLandscape] = useState(
     typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : true
@@ -73,23 +75,23 @@ export function ControlPanel({
 
   return (
     <div
-      className={`control-panel ${isLandscape ? 'landscape' : 'portrait'}`}
+      className={`control-panel ${isLandscape ? 'landscape' : 'portrait'} ${compact ? 'compact' : ''}`}
       style={{
         position: 'absolute',
-        top: 20,
-        right: 20,
+        top: compact ? 10 : 20,
+        right: compact ? 10 : 20,
         background: 'transparent',
         borderRadius: 16,
-        padding: 12,
+        padding: compact ? 8 : 12,
         color: 'white',
         fontFamily: 'system-ui, sans-serif',
-        fontSize: 14,
+        fontSize: compact ? 11 : 14,
         zIndex: 1000,
         backdropFilter: 'none',
-        maxWidth: 320,
+        maxWidth: compact ? 230 : 320,
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: compact ? 6 : 10,
         alignItems: 'flex-start',
       }}
     >
@@ -111,7 +113,7 @@ export function ControlPanel({
             onClick={onUndo}
             className={`tool-button ${canUndo ? '' : 'disabled'}`}
             style={{
-              marginBottom: 10,
+              marginBottom: compact ? 6 : 10,
               opacity: canUndo ? 1 : 0.5,
               cursor: canUndo ? 'pointer' : 'not-allowed',
             }}
@@ -121,8 +123,8 @@ export function ControlPanel({
           </button>
         )}
 
-        <div style={{ fontSize: 12, color: '#111', marginBottom: 10 }}>Tools</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ fontSize: compact ? 10 : 12, color: '#111', marginBottom: compact ? 6 : 10 }}>Tools</div>
+        <div style={{ display: 'flex', gap: compact ? 5 : 8, flexWrap: 'wrap', marginBottom: compact ? 8 : 12 }}>
           <button
             type="button"
             data-gesture-target="true"
@@ -163,8 +165,8 @@ export function ControlPanel({
 
         {availableObjects.length > 0 && onAddObject && (
           <>
-            <div style={{ fontSize: 12, color: '#111', marginBottom: 10 }}>Objects</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <div style={{ fontSize: compact ? 10 : 12, color: '#111', marginBottom: compact ? 6 : 10 }}>Objects</div>
+            <div style={{ display: 'flex', gap: compact ? 5 : 8, flexWrap: 'wrap', marginBottom: compact ? 8 : 12 }}>
               {availableObjects.map((objectItem) => (
                 <button
                   key={objectItem.id}
@@ -183,8 +185,8 @@ export function ControlPanel({
 
         {puzzlePieces.length > 0 && onSpawnPuzzlePiece && (
           <>
-            <div style={{ fontSize: 12, color: '#111', marginBottom: 10 }}>Puzzle Parts</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <div style={{ fontSize: compact ? 10 : 12, color: '#111', marginBottom: compact ? 6 : 10 }}>Puzzle Parts</div>
+            <div style={{ display: 'flex', gap: compact ? 5 : 8, flexWrap: 'wrap', marginBottom: compact ? 8 : 12 }}>
               {puzzlePieces.map((piece) => {
                 const disabled = piece.spawned || piece.locked;
                 return (
@@ -210,13 +212,13 @@ export function ControlPanel({
           </>
         )}
 
-        <div style={{ fontSize: 12, color: '#111', marginBottom: 10 }}>
+        <div style={{ fontSize: compact ? 10 : 12, color: '#111', marginBottom: compact ? 6 : 10 }}>
           Color {activeTool === 'paint' || activeTool === 'bucket' ? '' : '(Paint/Bucket only)'}
         </div>
         <div
           style={{
             display: 'flex',
-            gap: 10,
+            gap: compact ? 6 : 10,
             flexWrap: 'wrap',
             opacity: activeTool === 'paint' || activeTool === 'bucket' ? 1 : 0.55,
           }}
@@ -240,7 +242,7 @@ export function ControlPanel({
           ))}
         </div>
 
-        <div style={{ fontSize: 12, color: '#111', margin: '12px 0 8px 0' }}>
+        <div style={{ fontSize: compact ? 10 : 12, color: '#111', margin: compact ? '8px 0 5px 0' : '12px 0 8px 0' }}>
           Brush Size {activeTool === 'bucket' || activeTool === 'remove' ? '(Paint/Eraser only)' : ''}
         </div>
         <div
