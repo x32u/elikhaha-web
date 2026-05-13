@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect, useMemo, type RefObject } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo, type ReactNode, type RefObject } from 'react';
 import * as THREE from 'three';
 import { CameraFeed } from './components/CameraFeed';
 import { ARSceneV2, type SerializedPaintDecal, type SerializedPuzzlePiece, type SerializedSceneObject } from './components/ARSceneV2';
@@ -190,6 +190,45 @@ function VrSplitCompositor({
   );
 }
 
+function VrTwinOverlay({
+  zIndex = 1000,
+  children,
+}: {
+  zIndex?: number;
+  children: (eye: 'left' | 'right') => ReactNode;
+}) {
+  return (
+    <>
+      {(['left', 'right'] as const).map((eye) => (
+        <div
+          key={eye}
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: eye === 'left' ? 0 : '50%',
+            width: '50%',
+            overflow: 'hidden',
+            zIndex,
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'auto',
+            }}
+          >
+            {children(eye)}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function cloneSerializedArray<T>(value: T[] = []): T[] {
   return JSON.parse(JSON.stringify(value || [])) as T[];
 }
@@ -251,6 +290,10 @@ function ARApp({
   const [cameraError, setCameraError] = useState('');
   const cameraFeedEnabled = !manualCameraStart;
   const showCameraPrompt = canRunAr && manualCameraStart && !manualCameraReady;
+  const isVrActive = canRunAr && vrMode;
+  const [isPortrait, setIsPortrait] = useState(
+    typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
+  );
 
   // V2 hand tracking with quaternion-based rotation
   const {
@@ -451,6 +494,37 @@ function ARApp({
   useEffect(() => {
     setInstructionsConfirmed(!normalizedInstructions || isViewMode);
   }, [isViewMode, normalizedInstructions]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isVrActive) return undefined;
+
+    const orientation = window.screen?.orientation as (ScreenOrientation & {
+      lock?: (orientation: OrientationLockType) => Promise<void>;
+      unlock?: () => void;
+    }) | undefined;
+
+    orientation?.lock?.('landscape').catch(() => {
+      // Some browsers only allow orientation lock after fullscreen/user gesture.
+    });
+
+    return () => {
+      orientation?.unlock?.();
+    };
+  }, [isVrActive]);
 
   useEffect(() => {
     applyingUndoRef.current = true;
@@ -1040,7 +1114,7 @@ function ARApp({
         </div>
       )}
 
-      {canRunAr && !isViewMode && (
+      {canRunAr && !isViewMode && !vrMode && (
         <DebugOverlay
           debugInfo={debugInfo}
           grabState={grabState}
@@ -1052,7 +1126,7 @@ function ARApp({
         />
       )}
 
-      {canRunAr && !isViewMode && (
+      {canRunAr && !isViewMode && !vrMode && (
         <ControlPanel
           paintColor={paintColor}
           onPaintColorChange={setPaintColor}
@@ -1069,7 +1143,28 @@ function ARApp({
         />
       )}
 
-      {canRunAr && !isViewMode && (
+      {canRunAr && !isViewMode && vrMode && (
+        <VrTwinOverlay zIndex={1000}>
+          {() => (
+            <ControlPanel
+              paintColor={paintColor}
+              onPaintColorChange={setPaintColor}
+              activeTool={activeTool}
+              onToolChange={setActiveTool}
+              brushLevel={brushLevel}
+              onBrushLevelChange={handleBrushLevelChange}
+              canUndo={undoCount > 0}
+              onUndo={handleUndo}
+              availableObjects={availableObjects}
+              onAddObject={handleAddObject}
+              puzzlePieces={puzzlePieceControls}
+              onSpawnPuzzlePiece={handleSpawnPuzzlePiece}
+            />
+          )}
+        </VrTwinOverlay>
+      )}
+
+      {canRunAr && !isViewMode && !vrMode && (
         <div
           style={{
             position: 'absolute',
@@ -1102,6 +1197,43 @@ function ARApp({
         </div>
       )}
 
+      {canRunAr && !isViewMode && vrMode && (
+        <VrTwinOverlay zIndex={1100}>
+          {() => (
+            <div
+              style={{
+                position: 'absolute',
+                top: 16,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(0, 0, 0, 0.65)',
+                borderRadius: 999,
+                padding: '6px 12px',
+                color: 'white',
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                zIndex: 1100,
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: `#${toolConfig.color.getHexString()}`,
+                  border: '1px solid rgba(255,255,255,0.6)',
+                  boxShadow: '0 0 6px rgba(0,0,0,0.35)',
+                }}
+              />
+              <span>{toolConfig.label}</span>
+            </div>
+          )}
+        </VrTwinOverlay>
+      )}
+
       {canRunAr && isViewMode && artworkUrl && (
         <div
           style={{
@@ -1131,7 +1263,7 @@ function ARApp({
         </div>
       )}
 
-      {canRunAr && needsGesture && ttsAvailable && (
+      {canRunAr && needsGesture && ttsAvailable && !vrMode && (
         <button
           onClick={triggerSpeak}
           type="button"
@@ -1156,7 +1288,36 @@ function ARApp({
         </button>
       )}
 
-      {canRunAr && !ttsAvailable && currentTexts.length > 0 && (
+      {canRunAr && needsGesture && ttsAvailable && vrMode && (
+        <VrTwinOverlay zIndex={1120}>
+          {() => (
+            <button
+              onClick={triggerSpeak}
+              type="button"
+              style={{
+                position: 'absolute',
+                top: 54,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(255, 255, 255, 0.95)',
+                color: '#111',
+                border: 'none',
+                borderRadius: 999,
+                padding: '6px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                boxShadow: '0 6px 16px rgba(0,0,0,0.2)',
+                cursor: 'pointer',
+                zIndex: 1120,
+              }}
+            >
+              Tap to enable voice
+            </button>
+          )}
+        </VrTwinOverlay>
+      )}
+
+      {canRunAr && !ttsAvailable && currentTexts.length > 0 && !vrMode && (
         <div
           style={{
             position: 'absolute',
@@ -1184,6 +1345,40 @@ function ARApp({
             ))}
           </div>
         </div>
+      )}
+
+      {canRunAr && !ttsAvailable && currentTexts.length > 0 && vrMode && (
+        <VrTwinOverlay zIndex={1120}>
+          {() => (
+            <div
+              style={{
+                position: 'absolute',
+                top: 54,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(255, 255, 255, 0.95)',
+                color: '#111',
+                borderRadius: 16,
+                padding: '10px 14px',
+                fontSize: 11,
+                fontWeight: 600,
+                boxShadow: '0 6px 16px rgba(0,0,0,0.2)',
+                zIndex: 1120,
+                textAlign: 'center',
+                maxWidth: 240,
+              }}
+            >
+              <div style={{ fontSize: 10, color: '#666', marginBottom: 4 }}>
+                Voice unavailable — showing captions
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {currentTexts.map((text, index) => (
+                  <span key={`${text}-${index}`}>{text}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </VrTwinOverlay>
       )}
 
       {canRunAr && exitCountdown !== null && exitCountdown > 0 && (
@@ -1288,7 +1483,7 @@ function ARApp({
         </div>
       )}
 
-      {canRunAr && (
+      {canRunAr && !vrMode && (
         <div
           style={{
             position: 'absolute',
@@ -1322,6 +1517,61 @@ function ARApp({
           <div style={{ marginTop: 10, fontSize: 11, color: '#aaa', borderTop: '1px solid #444', paddingTop: 8 }}>
             <strong>Tips:</strong> Keep fist closed while moving. 
             Diagonal movement rotates both axes smoothly.
+          </div>
+        </div>
+      )}
+
+      {canRunAr && vrMode && (
+        <VrTwinOverlay zIndex={1000}>
+          {() => (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 14,
+                left: 14,
+                background: 'rgba(0, 0, 0, 0.72)',
+                borderRadius: 8,
+                padding: '8px 10px',
+                color: 'white',
+                fontSize: 10,
+                maxWidth: 230,
+                backdropFilter: 'blur(10px)',
+                zIndex: 1000,
+              }}
+            >
+              <strong>VR Controls:</strong>
+              <ul style={{ margin: '6px 0 0 0', paddingLeft: 14, lineHeight: 1.45 }}>
+                <li>Fist: rotate</li>
+                <li>Pinch: move</li>
+                <li>Two fists: zoom</li>
+                {!isViewMode && <li>Point: paint/select</li>}
+                <li>Two open palms: {isViewMode ? 'Exit' : 'Submit'} hold</li>
+              </ul>
+            </div>
+          )}
+        </VrTwinOverlay>
+      )}
+
+      {isVrActive && isPortrait && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 5000,
+            display: 'grid',
+            placeItems: 'center',
+            background: 'rgba(0,0,0,0.82)',
+            color: '#fff',
+            textAlign: 'center',
+            padding: 24,
+          }}
+        >
+          <div style={{ maxWidth: 360 }}>
+            <div style={{ fontSize: 44, marginBottom: 12 }}>↻</div>
+            <h2 style={{ margin: '0 0 8px', fontSize: 26 }}>Rotate to Landscape</h2>
+            <p style={{ margin: 0, color: 'rgba(255,255,255,0.78)', lineHeight: 1.45 }}>
+              VR mode is side-by-side and needs landscape orientation before placing the phone in the headset.
+            </p>
           </div>
         </div>
       )}
