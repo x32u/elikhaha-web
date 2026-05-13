@@ -28,6 +28,7 @@ type ARAppProps = {
   initialPuzzleState?: SerializedPuzzlePiece[];
   allowedObjectIds?: string[];
   puzzlePieces?: number;
+  manualCameraStart?: boolean;
 };
 
 type ArHistorySnapshot = {
@@ -92,6 +93,7 @@ function ARApp({
   initialPuzzleState = EMPTY_PUZZLE_STATE,
   allowedObjectIds = [],
   puzzlePieces = 0,
+  manualCameraStart = false,
 }: ARAppProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sceneCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -99,6 +101,9 @@ function ARApp({
   const normalizedInstructions = typeof arInstructions === 'string' ? arInstructions.trim() : '';
   const [instructionsConfirmed, setInstructionsConfirmed] = useState(!normalizedInstructions || isViewMode);
   const canRunAr = isViewMode || instructionsConfirmed;
+  const [cameraStartConfirmed, setCameraStartConfirmed] = useState(!manualCameraStart);
+  const [cameraError, setCameraError] = useState('');
+  const cameraEnabled = !manualCameraStart || cameraStartConfirmed;
 
   // V2 hand tracking with quaternion-based rotation
   const {
@@ -362,7 +367,13 @@ function ARApp({
   }, [pushUndoSnapshot]);
 
   const handleCameraReady = useCallback(() => {
+    setCameraError('');
     console.log('Camera ready');
+  }, []);
+
+  const handleCameraError = useCallback((message: string) => {
+    setCameraError(message);
+    setCameraStartConfirmed(false);
   }, []);
 
   const isOpenPalm = landmarks ? isOpenPalmGesture(landmarks) : false;
@@ -640,9 +651,69 @@ function ARApp({
       {/* Camera feed background */}
       <CameraFeed
         videoRef={videoRef}
+        enabled={cameraEnabled}
         facingMode="user"
         onReady={handleCameraReady}
+        onError={handleCameraError}
       />
+
+      {canRunAr && !cameraEnabled && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 60,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(255, 255, 255, 0.72)',
+            backdropFilter: 'blur(4px)',
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              width: 'min(420px, 92vw)',
+              borderRadius: 24,
+              background: '#fffefa',
+              boxShadow: '0 20px 60px rgba(20, 18, 23, 0.18)',
+              padding: 24,
+              textAlign: 'center',
+              color: '#141217',
+            }}
+          >
+            <div style={{ fontSize: 42, marginBottom: 8 }}>📷</div>
+            <h2 style={{ margin: '0 0 8px', fontSize: 24 }}>Start AR Camera</h2>
+            <p style={{ margin: '0 0 18px', color: '#6b5a4d', lineHeight: 1.45 }}>
+              Tap this button so Chrome starts the camera inside the app.
+            </p>
+            {cameraError && (
+              <p style={{ margin: '0 0 14px', color: '#b42318', fontWeight: 700 }}>
+                {cameraError}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setCameraError('');
+                setCameraStartConfirmed(true);
+              }}
+              style={{
+                border: 0,
+                borderRadius: 999,
+                background: '#1800ad',
+                color: '#fff',
+                fontWeight: 800,
+                fontSize: 18,
+                padding: '14px 28px',
+                cursor: 'pointer',
+              }}
+            >
+              Start Camera
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Three.js AR scene V2 */}
       <ARSceneV2

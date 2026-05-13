@@ -3,6 +3,8 @@ import { forwardRef, useEffect, useImperativeHandle } from 'react';
 interface CameraFeedProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onReady?: () => void;
+  onError?: (message: string) => void;
+  enabled?: boolean;
   facingMode?: 'user' | 'environment';
 }
 
@@ -11,14 +13,14 @@ export interface CameraFeedHandle {
 }
 
 export const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(
-  ({ videoRef, onReady, facingMode = 'environment' }, ref) => {
+  ({ videoRef, onReady, onError, enabled = true, facingMode = 'environment' }, ref) => {
     useImperativeHandle(ref, () => ({
       video: videoRef.current,
     }));
 
     useEffect(() => {
       const video = videoRef.current;
-      if (!video) return;
+      if (!video || !enabled) return;
 
       const startCamera = async () => {
         try {
@@ -52,6 +54,7 @@ export const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(
           };
         } catch (error) {
           console.error('Failed to access camera:', error);
+          onError?.(error instanceof Error ? error.message : 'Failed to access camera.');
         }
       };
 
@@ -63,7 +66,7 @@ export const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(
           stream.getTracks().forEach((track) => track.stop());
         }
       };
-    }, [videoRef, facingMode, onReady]);
+    }, [videoRef, enabled, facingMode, onReady, onError]);
 
     return (
       <video

@@ -11,6 +11,7 @@ const ActivityStart = () => {
   const { id } = useParams();
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const queryStudentId = query.get('studentId') || '';
+  const isMobileLaunch = query.get('mobile') === '1';
   const state = location.state || {};
   const [directActivity, setDirectActivity] = useState(null);
   const [loadingDirectActivity, setLoadingDirectActivity] = useState(false);
@@ -138,6 +139,7 @@ const ActivityStart = () => {
       modelFileType={modelFileType}
       modelConfigs={modelConfigs}
       puzzlePieces={puzzlePieces}
+      manualCameraStart={isMobileLaunch}
       onExit={(reason) => {
         notifyMobile(reason === 'submitted' ? 'submitted' : 'exit');
         navigate(-1);
