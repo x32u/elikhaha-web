@@ -12,6 +12,7 @@ const ActivityStart = () => {
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const queryStudentId = query.get('studentId') || '';
   const isMobileLaunch = query.get('mobile') === '1';
+  const returnUrl = query.get('returnUrl') || '';
   const state = location.state || {};
   const [directActivity, setDirectActivity] = useState(null);
   const [loadingDirectActivity, setLoadingDirectActivity] = useState(false);
@@ -107,11 +108,31 @@ const ActivityStart = () => {
 
   const notifyMobile = (type) => {
     const message = JSON.stringify({ type, activityId: id });
+    let deliveredToNative = false;
     try {
-      window.ElikhaMobile?.postMessage(message);
+      if (window.ElikhaMobile?.postMessage) {
+        window.ElikhaMobile.postMessage(message);
+        deliveredToNative = true;
+      }
       window.parent?.postMessage(message, '*');
     } catch {
       // Ignore when not running inside the Flutter WebView or iframe.
+    }
+    return deliveredToNative;
+  };
+
+  const returnToMobileApp = (type) => {
+    if (!returnUrl) return false;
+
+    try {
+      const target = new URL(returnUrl);
+      target.searchParams.set('arStatus', type);
+      if (id) target.searchParams.set('activityId', id);
+      window.location.replace(target.toString());
+      return true;
+    } catch {
+      window.location.replace(returnUrl);
+      return true;
     }
   };
 
@@ -141,7 +162,10 @@ const ActivityStart = () => {
       puzzlePieces={puzzlePieces}
       manualCameraStart={isMobileLaunch}
       onExit={(reason) => {
-        notifyMobile(reason === 'submitted' ? 'submitted' : 'exit');
+        const type = reason === 'submitted' ? 'submitted' : 'exit';
+        const deliveredToNative = notifyMobile(type);
+        if (returnToMobileApp(type)) return;
+        if (deliveredToNative) return;
         navigate(-1);
       }}
     />
