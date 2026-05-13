@@ -1,0 +1,63 @@
+.header {
+  position: relative;
+  width: 100%;
+  height: 70px;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  border-bottom: 1px solid #F5F2F0;
+}
+
+.logo {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 1;
+}
+
+.logo img {
+  height: 100%;
+  width: auto;
+  object-fit: contain;
+}
+
+.notification-icon {
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  margin-left: auto;
+}
+
+.notification-icon:hover {
+  transform: scale(1.1);
+}
+
+.notification-icon.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.notification-icon.is-disabled:hover {
+  transform: none;
+}
+
+.notification-icon:active {
+  transform: scale(0.95);
+}
+
+.notification-icon svg {
+  width: 32px;
+  height: 32px;
+  fill: #1C170D;
+}
