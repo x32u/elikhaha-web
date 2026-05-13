@@ -102,6 +102,7 @@ function ARApp({
   const [instructionsConfirmed, setInstructionsConfirmed] = useState(!normalizedInstructions || isViewMode);
   const canRunAr = isViewMode || instructionsConfirmed;
   const [manualCameraReady, setManualCameraReady] = useState(!manualCameraStart);
+  const [manualCameraStarting, setManualCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const cameraFeedEnabled = !manualCameraStart;
   const showCameraPrompt = canRunAr && manualCameraStart && !manualCameraReady;
@@ -369,49 +370,69 @@ function ARApp({
 
   const handleCameraReady = useCallback(() => {
     setCameraError('');
+    setManualCameraStarting(false);
     setManualCameraReady(true);
     console.log('Camera ready');
   }, []);
 
   const handleCameraError = useCallback((message: string) => {
     setCameraError(message);
+    setManualCameraStarting(false);
     setManualCameraReady(false);
   }, []);
 
-  const requestCameraStream = useCallback((constraints: MediaStreamConstraints) => (
-    Promise.race([
-      navigator.mediaDevices.getUserMedia(constraints),
-      new Promise<MediaStream>((_, reject) => {
-        window.setTimeout(() => {
-          reject(new Error('Camera request timed out. Close other camera tabs, then try again.'));
-        }, 8000);
-      }),
-    ])
+  const waitForVideoMetadata = useCallback((video: HTMLVideoElement) => (
+    new Promise<void>((resolve) => {
+      if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        resolve();
+        return;
+      }
+
+      const finish = () => {
+        window.clearTimeout(fallbackTimer);
+        video.removeEventListener('loadedmetadata', finish);
+        resolve();
+      };
+
+      const fallbackTimer = window.setTimeout(finish, 3000);
+      video.addEventListener('loadedmetadata', finish, { once: true });
+    })
   ), []);
+
+  const requestCameraStream = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Camera is not available in this browser.');
+    }
+
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+        audio: false,
+      });
+    } catch (primaryError) {
+      console.warn('Default camera constraints failed, retrying with any camera:', primaryError);
+      return navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+    }
+  }, []);
 
   const startManualCamera = useCallback(async () => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || manualCameraStarting) return;
 
     setCameraError('');
+    setManualCameraStarting(true);
+    const slowCameraTimer = window.setTimeout(() => {
+      setCameraError('Camera is taking longer than usual. Keep this page open and close other camera apps if it stays blank.');
+    }, 7000);
+
     try {
-      let stream: MediaStream;
-      try {
-        stream = await requestCameraStream({
-          video: {
-            facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-          audio: false,
-        });
-      } catch (primaryError) {
-        console.warn('Preferred camera constraints failed, retrying with default camera:', primaryError);
-        stream = await requestCameraStream({
-          video: true,
-          audio: false,
-        });
-      }
+      const stream = await requestCameraStream();
 
       if (video.srcObject) {
         const existingStream = video.srcObject as MediaStream;
@@ -421,13 +442,16 @@ function ARApp({
       video.srcObject = stream;
       video.muted = true;
       video.playsInline = true;
+      await waitForVideoMetadata(video);
       await video.play();
       handleCameraReady();
     } catch (error) {
       console.error('Failed to start manual camera:', error);
-      handleCameraError(error instanceof Error ? error.message : 'Failed to access camera.');
+      handleCameraError(error instanceof Error ? error.message : 'Failed to access camera. Check browser camera permission and try again.');
+    } finally {
+      window.clearTimeout(slowCameraTimer);
     }
-  }, [handleCameraError, handleCameraReady, requestCameraStream]);
+  }, [handleCameraError, handleCameraReady, manualCameraStarting, requestCameraStream, waitForVideoMetadata]);
 
   const isOpenPalm = landmarks ? isOpenPalmGesture(landmarks) : false;
   const isOpenPalmB = landmarksB ? isOpenPalmGesture(landmarksB) : false;
@@ -748,18 +772,19 @@ function ARApp({
             <button
               type="button"
               onClick={startManualCamera}
+              disabled={manualCameraStarting}
               style={{
                 border: 0,
                 borderRadius: 999,
-                background: '#1800ad',
+                background: manualCameraStarting ? '#6b63b7' : '#1800ad',
                 color: '#fff',
                 fontWeight: 800,
                 fontSize: 18,
                 padding: '14px 28px',
-                cursor: 'pointer',
+                cursor: manualCameraStarting ? 'wait' : 'pointer',
               }}
             >
-              Start Camera
+              {manualCameraStarting ? 'Starting Camera...' : 'Start Camera'}
             </button>
           </div>
         </div>
