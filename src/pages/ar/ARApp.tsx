@@ -101,9 +101,10 @@ function ARApp({
   const normalizedInstructions = typeof arInstructions === 'string' ? arInstructions.trim() : '';
   const [instructionsConfirmed, setInstructionsConfirmed] = useState(!normalizedInstructions || isViewMode);
   const canRunAr = isViewMode || instructionsConfirmed;
-  const [cameraStartConfirmed, setCameraStartConfirmed] = useState(!manualCameraStart);
+  const [manualCameraReady, setManualCameraReady] = useState(!manualCameraStart);
   const [cameraError, setCameraError] = useState('');
-  const cameraEnabled = !manualCameraStart || cameraStartConfirmed;
+  const cameraFeedEnabled = !manualCameraStart;
+  const showCameraPrompt = canRunAr && manualCameraStart && !manualCameraReady;
 
   // V2 hand tracking with quaternion-based rotation
   const {
@@ -368,13 +369,54 @@ function ARApp({
 
   const handleCameraReady = useCallback(() => {
     setCameraError('');
+    setManualCameraReady(true);
     console.log('Camera ready');
   }, []);
 
   const handleCameraError = useCallback((message: string) => {
     setCameraError(message);
-    setCameraStartConfirmed(false);
+    setManualCameraReady(false);
   }, []);
+
+  const startManualCamera = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    setCameraError('');
+    try {
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch (primaryError) {
+        console.warn('Preferred camera constraints failed, retrying with default camera:', primaryError);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
+      if (video.srcObject) {
+        const existingStream = video.srcObject as MediaStream;
+        existingStream.getTracks().forEach((track) => track.stop());
+      }
+
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      await video.play();
+      handleCameraReady();
+    } catch (error) {
+      console.error('Failed to start manual camera:', error);
+      handleCameraError(error instanceof Error ? error.message : 'Failed to access camera.');
+    }
+  }, [handleCameraError, handleCameraReady]);
 
   const isOpenPalm = landmarks ? isOpenPalmGesture(landmarks) : false;
   const isOpenPalmB = landmarksB ? isOpenPalmGesture(landmarksB) : false;
@@ -651,13 +693,13 @@ function ARApp({
       {/* Camera feed background */}
       <CameraFeed
         videoRef={videoRef}
-        enabled={cameraEnabled}
+        enabled={cameraFeedEnabled}
         facingMode="user"
         onReady={handleCameraReady}
         onError={handleCameraError}
       />
 
-      {canRunAr && !cameraEnabled && (
+      {showCameraPrompt && (
         <div
           style={{
             position: 'absolute',
@@ -694,10 +736,7 @@ function ARApp({
             )}
             <button
               type="button"
-              onClick={() => {
-                setCameraError('');
-                setCameraStartConfirmed(true);
-              }}
+              onClick={startManualCamera}
               style={{
                 border: 0,
                 borderRadius: 999,
