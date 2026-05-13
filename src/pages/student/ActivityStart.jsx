@@ -105,10 +105,12 @@ const ActivityStart = () => {
     }));
 
   const notifyMobile = (type) => {
+    const message = JSON.stringify({ type, activityId: id });
     try {
-      window.ElikhaMobile?.postMessage(JSON.stringify({ type, activityId: id }));
+      window.ElikhaMobile?.postMessage(message);
+      window.parent?.postMessage(message, '*');
     } catch {
-      // Ignore when not running inside the Flutter WebView.
+      // Ignore when not running inside the Flutter WebView or iframe.
     }
   };
 
