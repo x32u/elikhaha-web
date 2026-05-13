@@ -378,6 +378,17 @@ function ARApp({
     setManualCameraReady(false);
   }, []);
 
+  const requestCameraStream = useCallback((constraints: MediaStreamConstraints) => (
+    Promise.race([
+      navigator.mediaDevices.getUserMedia(constraints),
+      new Promise<MediaStream>((_, reject) => {
+        window.setTimeout(() => {
+          reject(new Error('Camera request timed out. Close other camera tabs, then try again.'));
+        }, 8000);
+      }),
+    ])
+  ), []);
+
   const startManualCamera = useCallback(async () => {
     const video = videoRef.current;
     if (!video) return;
@@ -386,7 +397,7 @@ function ARApp({
     try {
       let stream: MediaStream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        stream = await requestCameraStream({
           video: {
             facingMode: 'user',
             width: { ideal: 1280 },
@@ -396,7 +407,7 @@ function ARApp({
         });
       } catch (primaryError) {
         console.warn('Preferred camera constraints failed, retrying with default camera:', primaryError);
-        stream = await navigator.mediaDevices.getUserMedia({
+        stream = await requestCameraStream({
           video: true,
           audio: false,
         });
@@ -416,7 +427,7 @@ function ARApp({
       console.error('Failed to start manual camera:', error);
       handleCameraError(error instanceof Error ? error.message : 'Failed to access camera.');
     }
-  }, [handleCameraError, handleCameraReady]);
+  }, [handleCameraError, handleCameraReady, requestCameraStream]);
 
   const isOpenPalm = landmarks ? isOpenPalmGesture(landmarks) : false;
   const isOpenPalmB = landmarksB ? isOpenPalmGesture(landmarksB) : false;
@@ -704,11 +715,11 @@ function ARApp({
           style={{
             position: 'absolute',
             inset: 0,
-            zIndex: 60,
+            zIndex: 10000,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'rgba(255, 255, 255, 0.72)',
+            background: 'rgba(255, 255, 255, 0.86)',
             backdropFilter: 'blur(4px)',
             padding: 24,
           }}
